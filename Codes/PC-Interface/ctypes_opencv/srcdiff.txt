@@ -1,0 +1,390 @@
+=== modified file 'src/ctypes_opencv/cv.py'
+--- src/ctypes_opencv/cv.py	2010-03-11 19:29:20 +0000
++++ src/ctypes_opencv/cv.py	2010-03-11 20:06:20 +0000
+@@ -538,7 +538,10 @@
+         eig_image = cvCreateMat(image.height, image.width, CV_32FC1)
+     if temp_image is None:
+         temp_image = cvCreateMat(image.height, image.width, CV_32FC1)
+-    corners = (CvPoint2D32f*corner_count)() if corners is None else as_c_array(corners, elem_ctype=CvPoint2D32f)
++    if corners is None:
++        corners = (CvPoint2D32f*corner_count)()
++    else: 
++        corners = as_c_array(corners, elem_ctype=CvPoint2D32f)
+     count = c_int(corner_count)
+     _cvGoodFeaturesToTrack(image, eig_image, temp_image, corners, count, quality_level, min_distance, mask, block_size, use_harris, k)
+     return as_c_array(corners, n=count.value, elem_ctype=CvPoint2D32f)
+@@ -1069,7 +1072,11 @@
+ CV_THRESH_OTSU = 8        # use Otsu algorithm to choose the optimal threshold value
+ 
+ # Applies fixed-level threshold to array elements
+-cvThreshold = cfunc('cvThreshold', _cvDLL, c_double if cvVersion==110 else None,
++if cvVersion == 110:
++  __thresholdType = c_double
++else:
++  __thresholdType = None
++cvThreshold = cfunc('cvThreshold', _cvDLL, __thresholdType,
+     ('src', CvArr_r, 1), # const CvArr* src
+     ('dst', CvArr_r, 1), # CvArr* dst
+     ('threshold', c_double, 1), # double threshold
+@@ -1543,10 +1550,22 @@
+         True: returns the index of the maximum value
+         an instance of c_int: this holds the index of the maximum value instead
+     """
+-    min_val_p = c_float() if min_val is True else min_val
+-    max_val_p = c_float() if max_val is True else max_val
+-    min_idx_p = c_int() if min_idx is True else min_idx
+-    max_idx_p = c_int() if max_idx is True else max_idx
++    if min_val is True:
++        min_val_p = c_float()
++    else:
++        min_val_p = min_val
++    if max_val is True:
++        max_val_p = c_float()
++    else:
++        max_val_p = max_val
++    if min_idx is True:
++        min_idx_p = c_int()
++    else:
++        min_idx_p = min_idx
++    if max_idx is True:
++        max_idx_p = c_int()
++    else:
++        max_idx_p = max_idx
+     
+     _cvGetMinMaxHistValue(hist, min_value=min_val_p, max_value=max_val_p, min_idx=min_idx_p, max_idx=max_idx_p)
+     
+@@ -2034,10 +2053,17 @@
+     [ctypes-opencv] In any case, the function returns a sequence (CvSeq) of detected vertices if 'hull_storage' is an instance CvStorage, or 'hull_storage' itself if otherwise.
+     """
+     if isinstance(input, _CvSeqStructure): # a sequence
+-            return pointee(_cvConvexHull2(input, hull_storage, orientation, return_points), input if hull_storage is None else hull_storage)
++        if hull_storage is None:
++            return pointee(_cvConvexHull2(input, hull_storage, orientation, return_points), input)
++        else:
++            return pointee(_cvConvexHull2(input, hull_storage, orientation, return_points), hull_storage)
+             
+     if hull_storage is None:
+-        hull_storage = cvCreateMat(1, input.rows*input.cols, CV_MAT_TYPE(input) if return_points else CV_32SC1)
++        if return_points:
++            hull_storage = cvCreateMat(1, input.rows*input.cols, CV_MAT_TYPE(input))
++        else:
++            hull_storage = cvCreateMat(1, input.rows*input.cols, CV_32SC1)
++          
+     _cvConvexHull2(input, hull_storage, orientation, return_points)
+     return hull_storage
+ 
+@@ -2229,10 +2255,12 @@
+     edge = CvSubdiv2DEdge()
+     vertex = CvSubdiv2DPoint_p()
+     z = _cvSubdiv2DLocate(subdiv, pt, edge, vertex)
+-    return \
+-        (z, edge) if z == CV_PTLOC_INSIDE or z == CV_PTLOC_ONEDGE else \
+-        (z, vertex[0]) if z == CV_PTLOC_VERTEX else \
+-        (z,)
++    if z == CV_PTLOC_INSIDE or z == CV_PTLOC_ONEDGE:
++        return (z, edge)
++    if z == CV_PTLOC_VERTEX:
++        return (z, vertex[0])
++    else:
++        return (z,)
+ 
+ # Finds the closest subdivision vertex to given point
+ _cvFindNearestPoint2D = cfunc('cvFindNearestPoint2D', _cvDLL, CvSubdiv2DPoint_p,
+@@ -2540,7 +2568,10 @@
+     if count is None:
+         count = len(prev_features)
+     prev_features = as_c_array(prev_features, elem_ctype=CvPoint2D32f)
+-    curr_features = (CvPoint2D32f*count)() if curr_features is None else as_c_array(curr_features, elem_ctype=CvPoint2D32f)
++    if curr_features is None:
++        curr_features = (CvPoint2D32f*count)()
++    else:
++        curr_features = as_c_array(curr_features, elem_ctype=CvPoint2D32f)
+     if status is None:
+         status = (c_char*count)()
+     _cvCalcOpticalFlowPyrLK(prev, curr, prev_pyr, curr_pyr, prev_features, curr_features, count, win_size, level, status, track_error, criteria, flags)
+@@ -2622,7 +2653,10 @@
+         [ctypes-opencv] If 'results' is None, it is internally created as CV_32SC1 CvMat.
+         """
+         if results is None:
+-            results = cvCreateMat(1, tr.desc.rows, CV_32SC1) if bounds_min.rows == 1 else cvCreateMat(tr.desc.rows, 1, CV_32SC1)
++            if bounds_min.rows == 1:
++                results = cvCreateMat(1, tr.desc.rows, CV_32SC1)
++            else:
++                results = cvCreateMat(tr.desc.rows, 1, CV_32SC1)
+         n = _cvFindFeaturesBoxed(tr, bounds_min, bounds_max, results)
+         return (n, results)
+         
+@@ -2828,7 +2862,11 @@
+         [ctypes-opencv] If 'image_points' is None, it is internally created. In any case, 'image_points' is returned.
+         """
+         if image_points is None:
+-            sz = (1, object_points.cols) if object_points.rows == 1 else (object_points.rows, 1)
++            if object_points.rows == 1:
++                sz = (1, object_points.cols)
++            else:
++                sz = (object_points.rows, 1)
++              
+             image_points = cvCreateMat(sz[0], sz[1], CV_MAKETYPE(CV_MAT_DEPTH(object_points), 2))
+         _cvProjectPoints2(object_points, rotation_vector, intrinsic_matrix, distortion_coeffs, image_points, dpdrot, dpdt, dpdf, dpdc, dpddist, aspect_ratio)
+         return image_points
+@@ -3134,7 +3172,11 @@
+         [ctypes-opencv] If 'image_points' is None, it is internally created. In any case, 'image_points' is returned.
+         """
+         if image_points is None:
+-            sz = (1, object_points.cols) if object_points.rows == 1 else (object_points.rows, 1)
++            if object_points.rows == 1:
++                sz = (1, object_points.cols)
++            else:
++                sz = (object_points.rows, 1)
++              
+             image_points = cvCreateMat(sz[0], sz[1], CV_MAKETYPE(CV_MAT_DEPTH(object_points), 2))
+         _cvProjectPoints2(object_points, rotation_vector, intrinsic_matrix, distortion_coeffs, image_points, dpdrot, dpdt, dpdf, dpdc, dpddist)
+         return image_points
+
+=== modified file 'src/ctypes_opencv/cxcore.py'
+--- src/ctypes_opencv/cxcore.py	2010-03-11 19:29:20 +0000
++++ src/ctypes_opencv/cxcore.py	2010-03-11 20:01:57 +0000
+@@ -160,7 +160,10 @@
+                 if isinstance(v, ctypes._Pointer):
+                     # We'd like two NULL pointers to be equal, but ctypes will
+                     # fail obtaining the address, so use None for such pointers
+-                    v = addressof(v.contents) if v else None
++                    if v:
++                        v = addressof(v.contents)
++                    else:
++                        v = None
+                 elif isinstance(v, ctypes._SimpleCData):
+                     v = v.value
+             except Exception:
+@@ -233,7 +236,10 @@
+         self.atype = atype
+ 
+     def from_param(self, param):
+-        return byref(param) if isinstance(param, self.atype) else param
++        if isinstance(param, self.atype):  
++            return byref(param)
++        else:
++            return param
+ 
+ def pointee(ptr, *depends_args):
+     """Returns None if ptr is NULL else ptr's object with dependency tuple associated"""
+@@ -489,7 +495,10 @@
+ 
+     def __getitem__(self, key):
+         pixel = self.get_pixel(key)
+-        return pixel if len(pixel) > 1 else pixel[0]
++        if len(pixel) > 1:
++            return pixel
++        else:
++            return pixel[0]
+         
+     def __setitem__(self, key, value):
+         pixel = self.get_pixel(key)
+@@ -670,13 +679,22 @@
+ 
+ def check_slice(sl, length):
+     if isinstance(sl, slice):
+-        start = 0 if sl.start is None else sl.start
++        if sl.start is None:
++            start = 0
++        else:
++            start = sl.start
+         if not 0 <= start < length:
+             raise IndexError("Item %d is not in range [0,%d)" % (start, length))
+ 
+-        step = 1 if sl.step is None else sl.step
++        if sl.step is None:
++            step = 1
++        else:
++            step = sl.step
+             
+-        stop = length if step >= 0 else -1
++        if step >= 0:
++            stop = length
++        else:
++            stop = -1
+         if sl.stop is not None:
+             if step >= 0:
+                 if stop > sl.stop:
+@@ -791,7 +809,10 @@
+ 
+     def __getitem__(self, key):
+         z = self.get_pixel_or_slice2d(key)
+-        return z if isinstance(z, CvMat) or len(z) > 1 else z[0]
++        if isinstance(z, CvMat) or len(z) > 1:
++            return z
++        else:
++            return z[0]
+                     
+     def __setitem__(self, key, value):
+         z = self.get_pixel_or_slice2d(key)
+@@ -1550,7 +1571,10 @@
+     
+     Initializes CvAttrList structure
+     """
+-    return CvAttrList(attr, None) if next is None else CvAttrList(attr, next)
++    if next is None:
++        return CvAttrList(attr, None)
++    else:
++        return CvAttrList(attr, next)
+ 
+ class CvTypeInfo(_Structure): # forward declaration
+     pass
+@@ -3610,10 +3634,22 @@
+         True: returns the location of the maximum value
+         an instance of CvPoint: this holds the location of the maximum value instead
+     """
+-    min_val_p = c_double() if min_val is True else min_val
+-    max_val_p = c_double() if max_val is True else max_val
+-    min_loc_p = CvPoint() if min_loc is True else min_loc
+-    max_loc_p = CvPoint() if max_loc is True else max_loc
++    if min_val is True:
++        min_val_p = c_double()
++    else:
++        min_val_p = min_val
++    if max_val is True:
++        max_val_p = c_double()
++    else:
++        max_val_p = max_val
++    if min_loc is True:
++        min_loc_p = c_double()
++    else:
++        min_loc_p = min_loc
++    if max_loc is True:
++        max_loc_p = c_double()
++    else:
++        max_loc_p = max_loc
+     
+     _cvMinMaxLoc(arr, min_val=min_val_p, max_val=max_val_p, min_loc=min_loc_p, max_loc=max_loc_p, mask=mask)
+     
+@@ -4334,7 +4370,10 @@
+     [ctypes-opencv] Warning: I have not tested this function.
+     """
+     elem = cvGetSeqElem(set_header, index)
+-    return pointee(cast(elem, POINTER(CvSetElem)), set_header) if bool(elem) and CV_IS_SET_ELEM( elem ) else None
++    if bool(elem) and CV_IS_SET_ELEM( elem ):
++        return pointee(cast(elem, POINTER(CvSetElem)), set_header)
++    else:
++        return None
+ 
+     
+ # Clears set
+@@ -5026,7 +5065,10 @@
+     Moves iterator to the next line point
+     [ctypes-opencv] Warning: I haven't tested this function.
+     """
+-    mask = -1 if line_iterator.err < 0 else 0
++    if line_iterator.err < 0:
++        mask = -1
++    else:
++        mask = 0
+     line_iterator.err += line_iterator.minus_delta + (line_iterator.plus_delta & mask)
+     line_iterator.ptr = _ptr_add(line_iterator.ptr, line_iterator.minus_step + (line_iterator.plus_step & mask))
+ 
+@@ -5299,7 +5341,10 @@
+         return default_value
+     if CV_NODE_IS_INT(node.tag):
+         return node.data.i
+-    return cvRound(node.data.f) if CV_NODE_IS_REAL(node.tag) else 0x7fffffff
++    if CV_NODE_IS_REAL(node.tag):
++        return cvRound(node.data.f)
++    else:
++        return 0x7fffffff
+ 
+ # Finds file node and returns its value
+ def cvReadIntByName(fs, map, name, default_value=0):
+@@ -5319,7 +5364,10 @@
+         return default_value
+     if CV_NODE_IS_INT(node.tag):
+         return float(node.data.i)
+-    return node.data.f if CV_NODE_IS_REAL(node.tag) else 1e300
++    if CV_NODE_IS_REAL(node.tag):
++        return node.data.f
++    else:
++        return 1e300
+ 
+ # Finds file node and returns its value
+ def cvReadRealByName(fs, map, name, default_value=0.0):
+@@ -5337,7 +5385,10 @@
+     """
+     if node is None:
+         return default_value
+-    return node.data.str.ptr if CV_NODE_IS_STRING(node.tag) else None
++    if CV_NODE_IS_STRING(node.tag):
++        return node.data.str.ptr
++    else:
++        return None
+ 
+ # Finds file node and returns its value
+ def cvReadStringByName(fs, map, name, default_value=None):
+
+=== modified file 'src/ctypes_opencv/highgui_win32.py'
+--- src/ctypes_opencv/highgui_win32.py	2010-03-11 19:25:54 +0000
++++ src/ctypes_opencv/highgui_win32.py	2010-03-11 20:01:57 +0000
+@@ -51,7 +51,10 @@
+     from queue import Queue, Empty
+ 
+ from ctypes import windll
+-from functools import wraps
++try:
++    from functools import wraps
++except:
++    print "No functools support"
+ 
+ import ctypes_opencv.highgui as hg
+ 
+@@ -62,11 +65,17 @@
+ def threadmethod(func):
+     """Wraps a method so that it is executed within the image thread"""
+ 
+-    @wraps(func)
+-    def execute(self, *args, **kwargs):
+-        self.cmds.put((func, (self,)+args, kwargs))
+-        if self.synchronized:
+-            return self.result.get()
++    try:
++        @wraps(func)
++        def execute(self, *args, **kwargs):
++            self.cmds.put((func, (self,)+args, kwargs))
++            if self.synchronized:
++                return self.result.get()
++    except NameError:
++        def execute(self, *args, **kwargs):
++            self.cmds.put((func, (self,)+args, kwargs))
++            if self.synchronized:
++                return self.result.get()
+     return execute
+ 
+ 
+@@ -175,7 +184,10 @@
+     def WaitKey(self, wait=0):
+         # Note that this runs in caller's thread
+         try:
+-            result = self.keys.get(timeout=wait/1000.0 if wait > 0 else None)
++            if wait > 0:
++                result = self.keys.get(timeout=wait/1000.0)
++            else:
++                result = self.keys.get(timeout=None)
+         except Empty:
+             result = -1
+             
+
+=== modified file 'src/ctypes_opencv/interfaces.py'
+--- src/ctypes_opencv/interfaces.py	2010-03-11 19:29:20 +0000
++++ src/ctypes_opencv/interfaces.py	2010-03-11 20:12:50 +0000
+@@ -100,8 +100,12 @@
+             mode, decoder = _ipl_depth_and_nc_to_pil_mode_and_decoder[self.depth, self.nChannels]
+         except KeyError:
+             raise TypeError("Don't know how to convert the image. Check its depth and/or its number of channels.")
+-        return Image.fromstring(mode, (self.width, self.height), self.data_as_string(), 
+-            "raw", decoder, self.widthStep, 1 if self.origin==0 else -1)
++        if self.origin == 0:
++            return Image.fromstring(mode, (self.width, self.height), self.data_as_string(), 
++                "raw", decoder, self.widthStep, 1)
++        else:
++            return Image.fromstring(mode, (self.width, self.height), self.data_as_string(), 
++                "raw", decoder, self.widthStep, -1)
+     IplImage.as_pil_image = _iplimage_as_pil_image
+     
+     _pil_image_bands_to_ipl_attrs = {
+

@@ -1,0 +1,56 @@
+=== modified file 'demo/camshiftdemo.py'
+--- demo/camshiftdemo.py	2010-03-11 19:25:54 +0000
++++ demo/camshiftdemo.py	2010-03-11 20:01:57 +0000
+@@ -67,7 +67,10 @@
+     hue *= 0.033333333333333333333333333333333
+     sector = cvFloor(hue)
+     p = cvRound(255*(hue - sector))
+-    p ^= 255 if bool(sector & 1) else 0
++    if bool(sector & 1):
++        p ^= 255
++    else:
++        p ^= 0
+ 
+     rgb[sector_data[sector][0]] = 255
+     rgb[sector_data[sector][1]] = 0
+@@ -78,7 +81,10 @@
+ if __name__ == '__main__':
+     argc = len(argv)    
+     if argc == 1 or (argc == 2 and argv[1].isdigit()):
+-        capture = cvCaptureFromCAM( int(argv[1]) if argc == 2 else 0 )
++        deviceNum = 0
++        if argc == 2:
++            deviceNum = int(argv[1])
++        capture = cvCaptureFromCAM( deviceNum )
+     elif argc == 2:
+         capture = cvCaptureFromAVI( argv[1] )
+     else:
+@@ -133,7 +139,10 @@
+                 cvCalcHist( [hue], hist, 0, mask );
+                 min_val, max_val = cvGetMinMaxHistValue(hist)
+                 hbins = hist.bins[0]
+-                cvConvertScale( hbins, hbins, 255. / max_val if max_val else 0., 0 )
++                if max_val:
++                    cvConvertScale( hbins, hbins, 255. / max_val, 0 )
++                else:
++                    cvConvertScale( hbins, hbins, 0., 0 )
+                 cvResetImageROI( hue )
+                 cvResetImageROI( mask )
+                 track_window = selection
+
+=== modified file 'demo/kmeans.py'
+--- demo/kmeans.py	2010-03-11 19:25:54 +0000
++++ demo/kmeans.py	2010-03-11 20:01:57 +0000
+@@ -21,7 +21,10 @@
+         # generate random sample from multigaussian distribution
+         for k in range(cluster_count):
+             first = int(k*sample_count/cluster_count)
+-            last = int((k+1)*sample_count/cluster_count) if k != cluster_count else sample_count
++            if k != cluster_count:
++                last = int((k+1)*sample_count/cluster_count)
++            else:
++                last = sample_count
+             if first < last:
+                 cvRandArr(rng, cvGetRows(points, None, first, last), CV_RAND_NORMAL,
+                     cvScalar(cvRandInt(rng)%img.width,cvRandInt(rng)%img.height), cvScalar(img.width*0.1,img.height*0.1))
+
